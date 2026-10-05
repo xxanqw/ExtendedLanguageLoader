@@ -1,0 +1,32 @@
+name: Build and portable tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install cross-build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++ g++-mingw-w64-i686-posix python3
+      - name: Build loader-only release
+        env:
+          CXX: i686-w64-mingw32-g++-posix
+        run: bash build.sh
+      - name: Portable tests and public-package checks
+        run: bash test.sh
+      - name: Upload loader-only artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ExtendedLanguageLoader-v0.4.0
+          path: dist/ExtendedLanguageLoader-v0.4.0.zip
+          if-no-files-found: error

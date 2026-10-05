@@ -1,0 +1,31 @@
+# Generated outputs and private fixtures
+/dist/
+/tests/bin/
+/research/
+/fonts/
+/private/
+*.gxt
+*.txd
+*.dat
+*.asi
+*.exe
+*.dll
+*.zip
+*.7z
+*.rar
+*.png
+*.jpg
+*.log
+/tests/*results.txt
+__pycache__/
+*.py[cod]
+
+# Local secrets and editor/OS state
+.env
+.env.*
+*.pem
+*.key
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
