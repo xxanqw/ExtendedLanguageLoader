@@ -11,4 +11,5 @@ All 0.x.x releases are beta. Version names do not add a separate beta suffix.
 - Retain narrowly verified CLEO Redux 1.5.1 chaining, rollback and unknown-hook refusal.
 - Document the corrected separate Russian SanLtd pair; remove obsolete shared-atlas/metrics-only packaging.
 - Separate loader-only public releases from external private asset packs, portable tests and native/reference-dependent tests.
-- Add source license/credits, Git hygiene and asset-free cross-build CI. Archive research/generated outputs outside the source repository.
+- Add source license/credits, Git hygiene and asset-free CI. Archive research/generated outputs outside the source repository.
+- Build official artifacts natively with MSVC Win32 on Windows; static CRT, release optimization, explicit exports and x86 DLL/refusal smoke tests. Strip the MinGW development fallback and enforce a 2 MiB ASI packaging limit.

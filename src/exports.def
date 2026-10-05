@@ -1,0 +1,4 @@
+LIBRARY ExtendedLanguageLoader.asi
+EXPORTS
+    ExtendedLanguageLoaderStatus
+    ExtendedLanguageLoaderFontProfile

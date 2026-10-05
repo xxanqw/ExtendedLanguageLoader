@@ -2,12 +2,22 @@
 
 ## Portable / CI
 
+Official Windows build/tests:
+
+```powershell
+./build.ps1 -Test
+```
+
+Linux source tests / stripped development fallback:
+
 ```sh
 bash test.sh
 bash build.sh
 ```
 
-Native g++ tests cover menu counts 1–64, script layout mappings, validation, bounds and glyph-file structural routines. Python tests use generated synthetic GXTs, not game/translation assets. The default build produces a loader-only ZIP; package tests assert that it contains no game/third-party assets. CI runs these tests and an x86 MinGW cross-build only.
+Core C++ tests cover menu counts 1–64, script layout mappings, validation, bounds and GXT structural routines. Python tests use generated synthetic GXTs, not game/translation assets. Release checks require an x86 PE32 DLL ≤2 MiB without GNU debug sections and a loader-only ZIP without game/third-party assets.
+
+CI builds with native MSVC Win32 on Windows, verifies DLL loading/undecorated exports/non-game refusal in a native x86 host, logs runtime dependencies/size, and uploads that Windows ZIP. A separate Ubuntu job runs portable tests only. Neither job contains original game assets or establishes successful hooks/rasterization/gameplay in GTA. The MinGW fallback is not the official uploaded artifact.
 
 ## Optional original-native regression harness
 

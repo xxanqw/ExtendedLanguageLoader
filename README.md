@@ -47,14 +47,24 @@ Each consecutive `[1]`..`[N]` section defines:
 
 ## Build and test
 
-Linux cross-build dependencies: **Python 3, native g++, x86 MinGW-w64**. Native integration tests additionally need **Wine x86** and externally supplied reference files.
+**Official GitHub builds use Windows x86/MSVC**, not Linux cross-compilation. Install Visual Studio C++ Build Tools (x86/x64 tools and Windows SDK) and Python 3, then run:
+
+```powershell
+./build.ps1 -Test
+```
+
+The script selects **x86**, uses optimized release settings and static `/MT` CRT linkage, and runs asset-free tests plus a native DLL/export/non-game-refusal smoke test. No external VC++ runtime DLL is required. Packaging rejects ASIs over **2 MiB**, non-x86/non-DLL images and GNU debug sections.
+
+Linux remains a development fallback (Python 3, native g++, x86 MinGW-w64):
 
 ```sh
 bash test.sh       # Portable, asset-free tests
-bash build.sh      # ASI and loader-only public ZIP
+bash build.sh      # Stripped fallback ASI and loader-only ZIP
 ```
 
-Outputs: `dist/ExtendedLanguageLoader.asi` and **`dist/ExtendedLanguageLoader-v0.4.0.zip`**. The ZIP contains the ASI, example configs, docs and source license—not GXTs, TXDs, font metrics or third-party plugins. CI runs portable tests and the cross-build; it does not claim native-game validation.
+MinGW static libraries contain substantial debug data even without `-g`; the fallback strips it instead of shipping an 11+ MB ASI. Optional original-game native tests additionally need Wine x86 and external reference files.
+
+Outputs: `dist/ExtendedLanguageLoader.asi` and **`dist/ExtendedLanguageLoader-v0.4.0.zip`**. The ZIP contains the ASI, example configs, docs and source license—not GXTs, TXDs, font metrics or third-party plugins. CI runs portable tests on Ubuntu and builds/uploads only the native Windows artifact. It does not claim native-game validation.
 
 [Testing documentation](docs/TESTING.md) covers isolated native regressions, Redux ABI/refusal controls and optional **private** asset packs. No tests modify the installed game or use its Proton prefix.
 

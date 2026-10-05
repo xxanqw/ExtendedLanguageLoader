@@ -32,7 +32,8 @@ class PortablePreparationTest(unittest.TestCase):
         self.assertEqual(count, 1)
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'synthetic.gxt'; path.write_bytes(data)
-            subprocess.run([str(ROOT / 'tests/bin/core_test'), str(path)], check=True)
+            host = ROOT / ('tests/bin/core_test.exe' if sys.platform == 'win32' else 'tests/bin/core_test')
+            subprocess.run([str(host), str(path)], check=True)
 
     def test_truncated_and_invalid_structures(self):
         data = synthetic_gxt()
@@ -85,7 +86,27 @@ class PortablePreparationTest(unittest.TestCase):
                 self.assertIn(config[str(i)]['Font_profile'], ('keep', 'cyrillic', 'ukrainian', 'belarusian'))
                 self.assertNotIn(Path(config[str(i)]['GXT_file']).stem, DEFERRED)
 
-    @unittest.skipUnless((ROOT / 'dist/ExtendedLanguageLoader-v0.4.0.zip').exists(), 'run build.sh first for release checks')
+    def test_release_pe_architecture_size_and_debug_guards(self):
+        from package_release import validate_asi, MAX_ASI_BYTES
+        data = bytearray(512)
+        data[:2] = b'MZ'; struct.pack_into('<I', data, 0x3c, 64)
+        data[64:68] = b'PE\0\0'
+        struct.pack_into('<HH', data, 68, 0x14c, 1)
+        struct.pack_into('<HH', data, 84, 224, 0x2000)
+        struct.pack_into('<H', data, 88, 0x10b)
+        data[312:320] = b'.text\0\0\0'
+        self.assertEqual(validate_asi(data), 512)
+        for machine in (0x8664, 0):
+            bad = data.copy(); struct.pack_into('<H', bad, 68, machine)
+            with self.assertRaises(ValueError): validate_asi(bad)
+        bad = data.copy(); struct.pack_into('<H', bad, 86, 0)
+        with self.assertRaises(ValueError): validate_asi(bad)
+        bad = data.copy(); bad[312:320] = b'.debug\0\0'
+        with self.assertRaises(ValueError): validate_asi(bad)
+        with self.assertRaises(ValueError): validate_asi(bytes(MAX_ASI_BYTES + 1))
+        with self.assertRaises(ValueError): validate_asi(data[:100])
+
+    @unittest.skipUnless((ROOT / 'dist/ExtendedLanguageLoader-v0.4.0.zip').exists(), 'run a build first for release checks')
     def test_public_release_is_loader_only(self):
         with ZipFile(ROOT / 'dist/ExtendedLanguageLoader-v0.4.0.zip') as z:
             names = set(z.namelist())
@@ -99,7 +120,10 @@ class PortablePreparationTest(unittest.TestCase):
                 if name != 'ExtendedLanguageLoader.asi':
                     self.assertNotIn(b'/home/', z.read(name))
                     self.assertNotIn(b'/mnt/', z.read(name))
-            self.assertEqual(z.read('ExtendedLanguageLoader.asi'), (ROOT / 'dist/ExtendedLanguageLoader.asi').read_bytes())
+            binary = z.read('ExtendedLanguageLoader.asi')
+            self.assertEqual(binary, (ROOT / 'dist/ExtendedLanguageLoader.asi').read_bytes())
+            from package_release import validate_asi
+            validate_asi(binary)
 
 
 if __name__ == '__main__': unittest.main()

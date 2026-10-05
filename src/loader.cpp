@@ -420,11 +420,11 @@ void initialize() {
 }
 } // namespace
 
-extern "C" __declspec(dllexport) int __cdecl ExtendedLanguageLoaderStatus() { return ready ? 1 : 0; }
-extern "C" __declspec(dllexport) unsigned __cdecl ExtendedLanguageLoaderFontProfile() { return static_cast<unsigned>(fonts::loaded); }
-BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID) {
+extern "C" int __cdecl ExtendedLanguageLoaderStatus() { return ready ? 1 : 0; }
+extern "C" unsigned __cdecl ExtendedLanguageLoaderFontProfile() { return static_cast<unsigned>(fonts::loaded); }
+BOOL WINAPI DllMain(HINSTANCE, DWORD reason, LPVOID) {
+    // Static CRT builds require thread notifications; do not disable them.
     if (reason == DLL_PROCESS_ATTACH) {
-        DisableThreadLibraryCalls(instance);
         try { initialize(); }
         catch (const std::exception& e) { log(std::string("DISABLED: ") + e.what()); }
         catch (...) { log("DISABLED: unexpected initialization error"); }
