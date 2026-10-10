@@ -1,6 +1,20 @@
 # Changelog
 
-All 0.x.x releases are beta. Version names do not add a separate beta suffix.
+All 0.x.x releases are beta.
+
+## 0.4.1 Beta
+
+- Support self-contained ModLoader bundles alongside existing root/scripts installs.
+- Resolve config, translations and font assets from one selected installation; never mix missing bundle files with another root.
+- Route scoped main/mission GXT reads through the checked file entry while preserving ModLoader call-site detours and native short filenames.
+- Use physical path APIs for discovery, config reads, asset locks, logging and working-directory restoration despite ASI import translations.
+- Refuse duplicate copies, incomplete bundles and conflicting hooks; validate/read-lock configured GXTs.
+- Add optional four-sheet ELL rendering with independent widths, finite byte mappings, validated packages and safe vanilla/paired fallback.
+- Add offline GXT conversion with explicit source maps, preserved keys/offsets/tags and no encoding guessing.
+- Validate optional native wanted-star aliases in generated packages.
+- Preserve the inspected SilentPatch units hook during late ModLoader startup; use scoped menu-label CALLs so FXT text hooks remain intact.
+- Add a centered language-screen notice for experimental CLEO compatibility and GitHub bug reports, restoring the surrounding font state.
+- Add portable format/conversion/layout tests and isolated x86 root/bundle, mission-seek, import-translation, font-state and refusal coverage. Automated fixtures are not live GTA/RenderWare acceptance.
 
 ## 0.4.0
 

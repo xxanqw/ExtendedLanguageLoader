@@ -1,0 +1,45 @@
+name: Bug report
+description: Report an ELL problem or mod compatibility issue.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        CLEO compatibility is experimental. Please include the latest startup log and reproduction steps.
+        Redact personal paths; do not upload game executables, translations or font assets.
+  - type: input
+    id: version
+    attributes:
+      label: ELL version
+      placeholder: 0.4.1 Beta
+    validations:
+      required: true
+  - type: dropdown
+    id: layout
+    attributes:
+      label: Installation layout
+      options:
+        - Game root
+        - scripts/
+        - Self-contained ModLoader bundle
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Game and mods
+      description: Game executable version, Windows/Wine/Proton version, language/font package, and relevant mod versions (CLEO, Redux, ModLoader, SilentPatch, GInput, WidescreenFix).
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: What happened?
+      description: Reproduction steps, expected/actual behavior, and whether the issue happens after switching languages or restarting.
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Latest startup log
+      description: ExtendedLanguageLoader.log beside the active installation. Include any DISABLED messages. Redact personal paths.
+      render: text

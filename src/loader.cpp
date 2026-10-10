@@ -3,8 +3,13 @@
 // New implementation: pagination, script compatibility, checked patches and DEP-safe stubs.
 #include "core.hpp"
 #include "font_runtime.hpp"
+#include "extended_font_runtime.hpp"
+#include "install_layout.hpp"
+#include "text_assets.hpp"
 #include "menu_binding.hpp"
 #include "redux_binding.hpp"
+#include "silentpatch_binding.hpp"
+#include "compatibility_notice.hpp"
 #ifdef LL_HOOK_DIAGNOSTICS
 #include "hook_diagnostics.hpp"
 #endif
@@ -26,23 +31,28 @@ bool menuMismatchReported = false;
 constexpr uintptr_t CachedMenuScreen = 0x8CDFF0;
 constexpr size_t SelectedRow = 0x54, MouseVisible = 0xB8, MouseRow = 0x1B04;
 std::vector<ll::Language> languages;
-std::string root;
+std::string root, assetRoot, configPath;
+bool bundledInstall = false;
+HANDLE instanceGuard = nullptr; // process-scoped duplicate protection; retained while hooks exist
 std::string logPath;
 unsigned currentPage = 0;
 bool ready = false;
-bool autoFonts = false;
+bool autoFonts = false, extendedFonts = false, debugFonts = false;
 using GetTextFn = const char* (__thiscall*)(void*, const char*);
 GetTextFn originalGetText = nullptr;
 
 void log(const std::string& message) noexcept {
     OutputDebugStringA(("ExtendedLanguageLoader: " + message + "\n").c_str());
-    FILE* f = std::fopen(logPath.c_str(), "ab");
-    if (f) { std::fprintf(f, "%s\r\n", message.c_str()); std::fclose(f); }
+    const HANDLE f = winpaths::open(logPath.c_str(), FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE, OPEN_ALWAYS);
+    if (f != INVALID_HANDLE_VALUE) {
+        DWORD written=0;WriteFile(f,message.data(),static_cast<DWORD>(message.size()),&written,nullptr);
+        WriteFile(f,"\r\n",2,&written,nullptr);CloseHandle(f);
+    }
 }
 std::string setting(const std::string& section, const char* key, const char* fallback = "") {
     char value[512]{};
-    const DWORD n = GetPrivateProfileStringA(section.c_str(), key, fallback, value, sizeof(value),
-        (root + "text\\languages.ini").c_str());
+    const DWORD n = winpaths::setting(section.c_str(), key, fallback, value, sizeof(value),
+        configPath.c_str());
     if (n >= sizeof(value) - 1) throw std::runtime_error(std::string("INI value too long: ") + key);
     return value;
 }
@@ -55,9 +65,12 @@ unsigned number(const std::string& value, unsigned max, const char* key) {
     return static_cast<unsigned>(n);
 }
 void readConfig() {
-    if (GetFileAttributesA((root + "text\\languages.ini").c_str()) == INVALID_FILE_ATTRIBUTES)
-        throw std::runtime_error("Missing text\\languages.ini");
+    if (winpaths::attributes(configPath.c_str()) == INVALID_FILE_ATTRIBUTES)
+        throw std::runtime_error("Missing " + configPath);
     autoFonts = number(setting("MAIN", "Auto_fonts", "0"), 1, "Auto_fonts") != 0;
+    const auto booleanSetting=[](const std::string& value){if(value=="1"||value=="true"||value=="True")return true;if(value=="0"||value=="false"||value=="False")return false;throw std::runtime_error("Invalid [Fonts] boolean");};
+    extendedFonts=booleanSetting(setting("Fonts","ExtendedFonts","0"));
+    debugFonts=booleanSetting(setting("Fonts","DebugFonts","0"));
     const unsigned count = number(setting("MAIN", "Number_of_languages"), ll::MaxLanguages, "Number_of_languages");
     if (!count) throw std::runtime_error("Number_of_languages cannot be zero");
     languages.reserve(count);
@@ -68,6 +81,8 @@ void readConfig() {
         l.key = setting(section, "GXT_language_key");
         l.name = setting(section, "Menu_name");
         l.font = setting(section, "Font_profile", "keep");
+        l.fontPackage=setting(section,"Font_package");
+        l.fontEncoding=setting(section,"Font_encoding");
         l.metric = static_cast<uint8_t>(number(setting(section, "Is_system_metric", "0"), 1, "Is_system_metric"));
         const auto script = setting(section, "Script_language");
         l.scriptLanguage = script.empty() ? static_cast<uint8_t>(i < 5 ? i : 0) :
@@ -75,20 +90,8 @@ void readConfig() {
         languages.push_back(std::move(l));
     }
     ll::validate(languages);
-    std::set<std::string> checked;
-    for (const auto& l : languages) if (checked.insert(l.filename).second) {
-        std::ifstream f(root + "text\\" + l.filename, std::ios::binary);
-        if (!f) throw std::runtime_error("Missing physical text\\" + l.filename + " (test build does not discover Mod Loader-only GXTs)");
-        f.seekg(0, std::ios::end);
-        const auto size = f.tellg();
-        if (size <= 0 || size > 32 * 1024 * 1024) throw std::runtime_error("Invalid GXT file size: " + l.filename);
-        f.seekg(0);
-        std::vector<uint8_t> b(static_cast<size_t>(size));
-        if (!f.read(reinterpret_cast<char*>(b.data()), static_cast<std::streamsize>(b.size())))
-            throw std::runtime_error("Cannot read GXT: " + l.filename);
-        try { ll::validateGxt(b); }
-        catch (const std::exception& e) { throw std::runtime_error(l.filename + ": " + e.what()); }
-    }
+    textassets::configure(assetRoot, languages, bundledInstall);
+    fonts::textRoute = &textassets::route;
 }
 void writeMemory(uintptr_t address, const void* bytes, size_t size) {
     DWORD old = 0;
@@ -114,9 +117,7 @@ struct Patch {
 void check(const Patch& p) {
     if (!readable(p.address, p.expected.size()) ||
         std::memcmp(reinterpret_cast<void*>(p.address), p.expected.data(), p.expected.size())) {
-#ifdef LL_HOOK_DIAGNOSTICS
         log(hook_diagnostics::describe(p.address, p.expected.data(), p.expected.size()));
-#endif
         char location[20]; std::snprintf(location, sizeof(location), "0x%08lX", static_cast<unsigned long>(p.address));
         throw std::runtime_error(std::string("Unsupported EXE or conflicting hook at ") + location);
     }
@@ -168,12 +169,18 @@ const char* __cdecl resolveMain() noexcept {
         *reinterpret_cast<uint8_t*>(CurrentLanguage) = static_cast<uint8_t>(index);
         log("Retaining previous language because its replacement font profile did not validate/load");
     }
+    if (fonts::ready) ellfonts::switchLanguage(index);
     try { writePage(index / ll::PageSize, false); }
     catch (const std::exception& e) { log(e.what()); }
-    log("Main GXT load: text\\" + languages[index].filename);
+    textassets::select(languages[index].filename);
+    log("Main GXT load: " + assetRoot + "text\\" + languages[index].filename);
     return languages[index].filename.c_str();
 }
-const char* __cdecl resolveMission() noexcept { return languages[activeIndex()].filename.c_str(); }
+const char* __cdecl resolveMission() noexcept {
+    const auto& file = languages[activeIndex()].filename;
+    textassets::select(file);
+    return file.c_str();
+}
 unsigned __cdecl getScriptLanguage() noexcept { return languages[activeIndex()].scriptLanguage; }
 unsigned __cdecl getMetric() noexcept { return languages[activeIndex()].metric != 0; }
 
@@ -231,11 +238,43 @@ void refreshMenuBinding() noexcept {
         menuMismatchReported = true;
     }
 }
+void drawCompatibilityNotice() {
+    // The language screen does not reliably draw GTA's default helper (GInput
+    // can also replace it). Queue this footer when its title is looked up instead.
+    // Save current font details, NOT the queued RenderState/buffer: the notice
+    // must remain queued while the following title/rows retain their own style.
+    constexpr uintptr_t details=0xC71A54;
+    struct FontGuard {
+        std::array<uint8_t,0x4C> saved{};
+        unsigned style=ellfonts::lastStyle;
+        FontGuard(){std::memcpy(saved.data(),reinterpret_cast<const void*>(details),saved.size());}
+        ~FontGuard(){std::memcpy(reinterpret_cast<void*>(details),saved.data(),saved.size());ellfonts::lastStyle=style;}
+    } guard;
+    const auto stretchX=reinterpret_cast<float(__thiscall*)(void*,float)>(0x5733E0);
+    const auto stretchY=reinterpret_cast<float(__thiscall*)(void*,float)>(0x573410);
+    auto* manager=reinterpret_cast<void*>(MenuManager);
+    reinterpret_cast<void(__cdecl*)(float,float)>(0x719380)(stretchX(manager,0.28f),stretchY(manager,0.44f));
+    reinterpret_cast<void(__cdecl*)(unsigned)>(0x719490)(1); // Futura/body: keep the URL readable in mixed case
+    reinterpret_cast<void(__cdecl*)(unsigned)>(0x719610)(0); // centered
+    reinterpret_cast<void(__cdecl*)(float)>(0x7194D0)(stretchX(manager,580.0f));
+    reinterpret_cast<void(__cdecl*)(uint32_t)>(0x719430)(0xFFE2D4BA); // pale blue, RGBA bytes
+    reinterpret_cast<void(__cdecl*)(float)>(0x719500)(255.0f);
+    reinterpret_cast<void(__cdecl*)(int8_t)>(0x719590)(0);
+    reinterpret_cast<void(__cdecl*)(int16_t)>(0x719570)(0);
+    *reinterpret_cast<float*>(0xC71A6C)=0; // no title slant
+    *reinterpret_cast<uint8_t*>(0xC71A7B)=0; // no background
+    *reinterpret_cast<uint8_t*>(0xC71A7D)=1; // proportional
+    *reinterpret_cast<uint8_t*>(0xC71A54)=0; // no inherited button symbol
+    reinterpret_cast<void(__cdecl*)(float,float,const char*)>(0x71A820)(
+        stretchX(manager,320.0f),stretchY(manager,440.0f),compatibility_notice::Text);
+}
 const char* __fastcall getText(void* text, void*, const char* key) {
     // ASIs can relocate aScreens AFTER our DllMain. Refresh before the native
     // language screen draws its title/rows; never force its pointers back to stock.
     if (key && *reinterpret_cast<uint8_t*>(MenuManager + 0x15D) == 28 &&
         (!std::strcmp(key, "FEH_LAN") || !std::strncmp(key, "LLT", 3))) refreshMenuBinding();
+    if (key && !std::strcmp(key,"FEH_LAN") &&
+        *reinterpret_cast<uint8_t*>(MenuManager+0x15D)==28) drawCompatibilityNotice();
     if (key && !*key) return ""; // Hidden navigation placeholders need no native text lookup.
     if (key && !std::strcmp(key, "LLTPREV")) return "Previous page";
     if (key && !std::strcmp(key, "LLTNEXT")) return "Next page";
@@ -296,6 +335,25 @@ struct Code {
         }
         return start;
     }
+    uintptr_t widthTrampoline(const Patch& patch) {
+        const auto start=here();
+        // GetCharacterSize prologue contains a short JNE; relocate it rather than copying it verbatim.
+        for(unsigned i=0;i<6;++i)emit({patch.expected[i]});
+        emit({0x0F,0x85});dword(static_cast<uint32_t>(0x71975E - here() - 4));
+        branch(0xE9,0x719758);return start;
+    }
+    uintptr_t fontMid(const Patch& patch, bool mapping) {
+        const auto start=here();emit({0x9C,0x60}); // preserve flags/registers; no existing x87 operands at these sites
+        emit({0x8D,0x4C,0x24,0x24}); // original ESP
+        if(mapping)emit({0x0F,0xB6,0xC0,0x50}); // unsigned original AL byte
+        emit({0x51});branch(0xE8,mapping?reinterpret_cast<uintptr_t>(&ellfonts::mapBufferedGlyph):reinterpret_cast<uintptr_t>(&ellfonts::advanceBufferedGlyph));
+        emit({0x83,0xC4,static_cast<uint8_t>(mapping?8:4),0x84,0xC0,0x74,0x00});
+        const auto branchOffset=bytes.size()-1;
+        emit({0x61,0x9D});if(mapping)emit({0x8A,0x4C,0x24,0x10});
+        branch(0xE9,mapping?0x7199E7:0x719ADC);
+        bytes[branchOffset]=static_cast<uint8_t>(bytes.size()-branchOffset-1);
+        emit({0x61,0x9D});for(auto b:patch.expected)emit({b});branch(0xE9,patch.address+patch.expected.size());return start;
+    }
     void seal() {
         if (bytes.size() > 4096) throw std::runtime_error("Code allocation exceeded");
         std::memcpy(memory, bytes.data(), bytes.size());
@@ -305,21 +363,37 @@ struct Code {
     }
 };
 
-void initialize() {
-    char filename[MAX_PATH]{};
-    const DWORD n = GetModuleFileNameA(nullptr, filename, sizeof(filename));
-    if (!n || n >= sizeof(filename)) throw std::runtime_error("Game path is too long");
-    root = filename;
-    root.resize(root.find_last_of("\\/") + 1);
+void initialize(HINSTANCE instance) {
+    char filename[MAX_PATH]{}, moduleFilename[MAX_PATH]{};
+    const DWORD n = winpaths::moduleName(nullptr, filename, sizeof(filename));
+    const DWORD m = winpaths::moduleName(instance, moduleFilename, sizeof(moduleFilename));
+    if (!n || n >= sizeof(filename) || !m || m >= sizeof(moduleFilename)) throw std::runtime_error("Game/ASI path is too long");
+    root = ll::parentDirectory(filename);
     logPath = root + "ExtendedLanguageLoader.log";
-    log("ExtendedLanguageLoader 0.4.0 - Latin/Cyrillic, SA 1.0 US only");
+    const auto exists=[](const std::string& path){const auto attrs=winpaths::attributes(path.c_str());return attrs!=INVALID_FILE_ATTRIBUTES && !(attrs&FILE_ATTRIBUTE_DIRECTORY);};
+    // Place early errors beside the ASI too, without relying on the process CWD.
+    logPath = ll::parentDirectory(moduleFilename) + "ExtendedLanguageLoader.log";
+    const auto layout = ll::selectLayout(root, moduleFilename, exists);
+    assetRoot = layout.assetRoot; configPath = layout.config; bundledInstall = layout.bundled;
+    logPath = assetRoot + "ExtendedLanguageLoader.log";
+    // Protect against two copies, including renamed copies. Never enumerate modules
+    // or change ModLoader priorities while holding the Windows loader lock.
+    const std::string guardName="Local\\ExtendedLanguageLoader_"+std::to_string(GetCurrentProcessId());
+    instanceGuard=CreateMutexA(nullptr,FALSE,guardName.c_str());
+    const DWORD guardError=GetLastError();
+    if(!instanceGuard)throw std::runtime_error("Cannot create ELL instance guard");
+    if(guardError==ERROR_ALREADY_EXISTS){CloseHandle(instanceGuard);instanceGuard=nullptr;throw std::runtime_error("Another ExtendedLanguageLoader copy is already loaded");}
+    if(bundledInstall)for(const char* path:{"ExtendedLanguageLoader.asi","scripts\\ExtendedLanguageLoader.asi"})
+        if(exists(root+path) && ll::pathKey(root+path)!=ll::pathKey(moduleFilename))throw std::runtime_error(std::string("Remove the root/scripts ELL copy before using the bundle: ")+path);
+    log("ExtendedLanguageLoader 0.4.1 - Latin/Cyrillic, SA 1.0 US only");
+    log(std::string("Installation: ")+(bundledInstall?"ASI-local bundle":"game root")+"; config "+configPath);
 #ifdef LL_HOOK_DIAGNOSTICS
     log("Read-only hook diagnostics enabled; unknown hooks are still refused");
 #endif
     // Detect the original loader before it can overwrite these hooks in the usual load locations.
     for (const char* path : {"LanguageLoader.asi", "scripts\\LanguageLoader.asi",
                              "LanguageLoaderTest.asi", "scripts\\LanguageLoaderTest.asi"})
-        if (GetFileAttributesA((root + path).c_str()) != INVALID_FILE_ATTRIBUTES)
+        if (exists(root + path) || (bundledInstall && exists(assetRoot + path)))
             throw std::runtime_error(std::string("Remove/rename the old loader first: ") + path);
     if (!readable(GameBase, 0x100) || *reinterpret_cast<uint16_t*>(GameBase) != 0x5A4D ||
         *reinterpret_cast<uint8_t*>(GameBase + 0x88) != 0xCA)
@@ -332,9 +406,24 @@ void initialize() {
         {0x57CD7B, {0x0F,0x87,0xC6,0x06,0x00,0x00}, {}},
         {0x6A0050, {0x83,0xEC,0x20,0x56,0x57}, {}},
     };
-    // All sites still require vanilla signatures except the precisely identified,
-    // pinned Redux text detour with a verified non-recursive native fallback.
+    // A late-loaded bundle intercepts only the renderer's checked label CALL,
+    // not CText::Get. FXT's temporary unhook/re-hook therefore cannot erase ELL
+    // or create a recursive text chain. Other keys still use the native entry.
+    if (bundledInstall) {
+        patches[5]={0x579D73,{0xE8,0xD8,0x62,0x12,0x00},{}};
+        log("Bundle menu labels: scoped renderer CALL; existing CText::Get chain preserved");
+    }
+    bool preserveUnits=false;
     for (auto& p : patches) {
+        if (p.address==0x56D220 && readable(p.address,p.expected.size()) &&
+            std::memcmp(reinterpret_cast<const void*>(p.address),p.expected.data(),p.expected.size())) {
+            // Root ELL was already superseded by this fix when SilentPatch
+            // loaded later. Honor its locale/Units setting in either order.
+            silentpatch_binding::validateUnits(p.address);
+            std::memcpy(p.expected.data(),reinterpret_cast<const void*>(p.address),p.expected.size());
+            preserveUnits=true;
+            log("Pinned SilentPatch units fix preserved; native Units/locale takes precedence over per-language metrics");
+        }
         if (p.address == 0x6A0050 && readable(p.address, p.expected.size()) &&
             std::memcmp(reinterpret_cast<const void*>(p.address), p.expected.data(), p.expected.size())) {
             try {
@@ -353,8 +442,25 @@ void initialize() {
         !readable(CachedMenuScreen, sizeof(int32_t)))
         throw std::runtime_error("Game menu memory is not accessible");
     readConfig();
-    fonts::configure(autoFonts, root, languages, &log);
-    if (autoFonts) {
+    fonts::configure(autoFonts, assetRoot, languages, &log);
+    ellfonts::configure(extendedFonts,assetRoot,languages,&log,debugFonts);
+    std::vector<Patch> ellPatches;
+    if (extendedFonts) {
+        ellPatches={
+            {0x719490,{0x8A,0x4C,0x24,0x04,0x0F,0xB6,0xC1},{}},
+            {0x719750,{0x8A,0x44,0x24,0x04,0x3C,0x3F,0x75,0x06},{}},
+            {0x719670,{0x8A,0x54,0x24,0x04,0x83,0xEC,0x08},{}},
+            {0x718770,{0x8A,0x44,0x24,0x04,0x3C,0x3F},{}},
+            {0x718A10,{0xD9,0x44,0x24,0x08,0x83,0xEC,0x20},{}},
+            {0x71985B,{0x8D,0x0C,0x8D,0xD0,0x1A,0xC7,0x00},{}},
+            {0x719B05,{0x8D,0x0C,0x8D,0xD0,0x1A,0xC7,0x00},{}},
+            {0x7199AD,{0x8A,0x0D,0xC9,0x1A,0xC7,0x00},{}},
+            {0x719A6B,{0x80,0xF9,0x3F,0x8A,0xC1},{}},
+        };
+        try{for(const auto& p:ellPatches)check(p);}
+        catch(const std::exception& e){log(std::string("[ELL Fonts] Hook conflict; extended mode disabled, using vanilla: ")+e.what());extendedFonts=ellfonts::enabled=false;ellPatches.clear();}
+    }
+    if (autoFonts || extendedFonts) {
         patches.push_back({0x5BA690, {0x51,0x56,0x68,0x5C,0xA6,0x86,0x00}, {}});
         patches.push_back({0x7189B0, {0x56,0x57,0xB9,0xD0,0x1A,0xC7,0x00}, {}});
         patches.push_back({0x7320B0, {0x8B,0x44,0x24,0x08,0x90}, {}});
@@ -367,6 +473,14 @@ void initialize() {
         if (!readable(fonts::NativeDirectory, fonts::NativeDirectorySize))
             throw std::runtime_error("CFileMgr directory memory is not accessible");
     }
+    // Bundle GXTs also work with extended/automatic fonts disabled. Do not add
+    // graphics hooks in that case, only the already-audited file entry.
+    size_t bundleOpenPatch = 0;
+    if (bundledInstall && !(autoFonts || extendedFonts)) {
+        bundleOpenPatch = patches.size();
+        patches.push_back({0x538900, {0xE9,0xD3,0xA9,0x2E,0x00}, {}});
+        check(patches.back());
+    }
     Code code;
     const auto main = code.resolver(reinterpret_cast<uintptr_t>(&resolveMain), 0x6A01E3, 28, true);
     const auto mission = code.resolver(reinterpret_cast<uintptr_t>(&resolveMission), 0x69FD06, 28, true);
@@ -374,8 +488,9 @@ void initialize() {
     const auto action = code.action();
     // Relocate the accepted E9 to Redux, or preserve the original native prologue.
     // Never copy a relative detour verbatim into a differently addressed thunk.
-    originalGetText = reinterpret_cast<GetTextFn>(code.trampoline(patches[5]));
-    if (autoFonts) {
+    originalGetText = bundledInstall ? reinterpret_cast<GetTextFn>(0x6A0050) :
+        reinterpret_cast<GetTextFn>(code.trampoline(patches[5]));
+    if (autoFonts || extendedFonts) {
         fonts::originalInit = reinterpret_cast<fonts::VoidFn>(code.trampoline(patches[6]));
         fonts::originalShutdown = reinterpret_cast<fonts::VoidFn>(code.trampoline(patches[7]));
         fonts::originalLoadTxd = reinterpret_cast<fonts::LoadTxdFn>(code.trampoline(patches[8]));
@@ -385,15 +500,47 @@ void initialize() {
         patches[8].replacement = jump(patches[8].address, reinterpret_cast<uintptr_t>(&fonts::loadTxd));
         patches[9].replacement = jump(patches[9].address, reinterpret_cast<uintptr_t>(&fonts::openFile));
     }
+    if (bundleOpenPatch) {
+        fonts::originalOpenFile = reinterpret_cast<fonts::OpenFileFn>(code.trampoline(patches[bundleOpenPatch]));
+        patches[bundleOpenPatch].replacement = jump(patches[bundleOpenPatch].address, reinterpret_cast<uintptr_t>(&fonts::openFile));
+    }
+    if(extendedFonts) {
+        ellfonts::originalStyle=reinterpret_cast<ellfonts::StyleFn>(code.trampoline(ellPatches[0]));
+        ellfonts::originalWidth=reinterpret_cast<ellfonts::WidthFn>(code.widthTrampoline(ellPatches[1]));
+        ellfonts::originalScriptWidth=reinterpret_cast<ellfonts::WidthFn>(code.trampoline(ellPatches[2]));
+        ellfonts::originalProp=reinterpret_cast<ellfonts::WidthFn>(code.trampoline(ellPatches[3]));
+        ellfonts::originalPrint=reinterpret_cast<ellfonts::PrintFn>(code.trampoline(ellPatches[4]));
+        const uintptr_t callbacks[]={reinterpret_cast<uintptr_t>(&ellfonts::setStyle),reinterpret_cast<uintptr_t>(&ellfonts::characterWidth),reinterpret_cast<uintptr_t>(&ellfonts::scriptWidth),reinterpret_cast<uintptr_t>(&ellfonts::propWidth),reinterpret_cast<uintptr_t>(&ellfonts::printChar)};
+        for(unsigned i=0;i<5;++i)ellPatches[i].replacement=jump(ellPatches[i].address,callbacks[i],ellPatches[i].expected.size());
+        for(unsigned i=5;i<7;++i)ellPatches[i].replacement=jump(ellPatches[i].address,code.resolver(reinterpret_cast<uintptr_t>(&ellfonts::bufferedSprite),ellPatches[i].address+7,24,false),7);
+        ellPatches[7].replacement=jump(ellPatches[7].address,code.fontMid(ellPatches[7],true),6);
+        ellPatches[8].replacement=jump(ellPatches[8].address,code.fontMid(ellPatches[8],false));
+        for(auto& p:ellPatches)patches.push_back(std::move(p));
+        fonts::afterInit=[](){ellfonts::switchLanguage(activeIndex());};
+        fonts::beforeShutdown=[](){if(ellfonts::active)reinterpret_cast<fonts::VoidFn>(0x71A210)();ellfonts::release();};
+    }
+    if (bundledInstall) for (const auto& site : std::array<Patch,2>{{
+        {0x579688,{0xE8,0xC3,0x69,0x12,0x00},{}}, // screen title: refresh late-relocated menu first
+        {0x579824,{0xE8,0x27,0x68,0x12,0x00},{}}  // selected/first row label
+    }}) {
+        check(site);
+        auto patch=site;
+        patch.replacement=jump(patch.address,reinterpret_cast<uintptr_t>(&getText));
+        patch.replacement[0]=0xE8;
+        patches.push_back(std::move(patch));
+    }
+    log(std::string("Language-title-driven compatibility footer; reports: ")+compatibility_notice::IssuesUrl);
     code.seal();
     patches[0].replacement = jump(patches[0].address, main, patches[0].expected.size());
     patches[1].replacement = jump(patches[1].address, mission, patches[1].expected.size());
-    patches[2].replacement = jump(patches[2].address, reinterpret_cast<uintptr_t>(&getMetric));
+    patches[2].replacement = preserveUnits ? patches[2].expected :
+        jump(patches[2].address, reinterpret_cast<uintptr_t>(&getMetric));
     patches[3].replacement = jump(patches[3].address, script, patches[3].expected.size());
     patches[4].replacement = {0x0F, 0x87}; // Keep conditional JA and the original stock-action dispatcher.
     const uint32_t offset = static_cast<uint32_t>(action - 0x57CD81);
     for (unsigned i = 0; i < 4; ++i) patches[4].replacement.push_back(static_cast<uint8_t>(offset >> (8 * i)));
     patches[5].replacement = jump(patches[5].address, reinterpret_cast<uintptr_t>(&getText));
+    if (bundledInstall) patches[5].replacement[0]=0xE8; // preserve native thiscall stack/return
     ll::Menu originalMenu{};
     std::memcpy(originalMenu.data(), reinterpret_cast<void*>(initialMenu), sizeof(originalMenu));
     const int32_t originalCache = *reinterpret_cast<int32_t*>(CachedMenuScreen);
@@ -402,13 +549,13 @@ void initialize() {
         for (const auto& p : patches) check(p); // Detect a changed detour before committing.
         for (const auto& p : patches) {
             ++applied; // Include a partially written patch in rollback.
-            writeMemory(p.address, p.replacement.data(), p.replacement.size());
+            if (p.replacement!=p.expected) writeMemory(p.address, p.replacement.data(), p.replacement.size());
         }
         writePage(0, false);
     } catch (...) {
         while (applied) {
             const auto& p = patches[--applied];
-            try { writeMemory(p.address, p.expected.data(), p.expected.size()); } catch (...) {}
+            try { if(p.replacement!=p.expected) writeMemory(p.address, p.expected.data(), p.expected.size()); } catch (...) {}
         }
         try { writeMemory(initialMenu, originalMenu.data(), sizeof(originalMenu)); } catch (...) {}
         *reinterpret_cast<int32_t*>(CachedMenuScreen) = originalCache;
@@ -422,10 +569,10 @@ void initialize() {
 
 extern "C" int __cdecl ExtendedLanguageLoaderStatus() { return ready ? 1 : 0; }
 extern "C" unsigned __cdecl ExtendedLanguageLoaderFontProfile() { return static_cast<unsigned>(fonts::loaded); }
-BOOL WINAPI DllMain(HINSTANCE, DWORD reason, LPVOID) {
+BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID) {
     // Static CRT builds require thread notifications; do not disable them.
     if (reason == DLL_PROCESS_ATTACH) {
-        try { initialize(); }
+        try { initialize(instance); }
         catch (const std::exception& e) { log(std::string("DISABLED: ") + e.what()); }
         catch (...) { log("DISABLED: unexpected initialization error"); }
     }

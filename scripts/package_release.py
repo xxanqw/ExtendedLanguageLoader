@@ -39,7 +39,7 @@ def package():
     binary = ROOT / 'dist/ExtendedLanguageLoader.asi'
     data = binary.read_bytes()
     validate_asi(data)
-    archive = ROOT / 'dist/ExtendedLanguageLoader-v0.4.0.zip'
+    archive = ROOT / 'dist/ExtendedLanguageLoader-v0.4.1.zip'
     with ZipFile(archive, 'w', ZIP_DEFLATED) as z:
         z.write(binary, 'ExtendedLanguageLoader.asi')
         for name in ('README.md', 'LICENSE', 'NOTICE.md', 'CHANGELOG.md'):

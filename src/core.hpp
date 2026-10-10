@@ -46,6 +46,8 @@ struct Language {
     uint8_t metric = 0;
     uint8_t scriptLanguage = 0;
     std::string font = "keep";
+    std::string fontPackage = ""; // optional directory relative to the selected root/ASI-local bundle
+    std::string fontEncoding = ""; // must match canonical package manifest; GXT bytes are unchanged
 };
 #pragma pack(push, 1)
 struct MenuEntry {
@@ -88,6 +90,12 @@ inline void validate(const std::vector<Language>& languages) {
         if (l.metric > 1 || l.scriptLanguage > 4)
             throw std::runtime_error("Is_system_metric must be 0/1 and Script_language must be 0..4");
         fontProfile(l.font); // One profile registry for configuration and runtime routing.
+        if (!l.fontPackage.empty() && (!ascii(l.fontPackage) || l.fontPackage.size()>180 ||
+            l.fontPackage.find("..")!=std::string::npos || l.fontPackage.find(':')!=std::string::npos ||
+            l.fontPackage.front()=='/' || l.fontPackage.front()=='\\'))
+            throw std::runtime_error("Font_package must be a safe installation-relative folder");
+        if (!l.fontEncoding.empty() && (!ascii(l.fontEncoding) || l.fontEncoding.size()>80))
+            throw std::runtime_error("Font_encoding must be a short ASCII manifest identifier");
     }
 }
 inline unsigned pageCount(unsigned count) { return (count + PageSize - 1) / PageSize; }

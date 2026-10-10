@@ -52,7 +52,7 @@ class PortablePreparationTest(unittest.TestCase):
             before = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in source.iterdir()}
             report = prepare(source, output)
             self.assertEqual(report['project'], 'ExtendedLanguageLoader')
-            self.assertEqual(report['release'], '0.4.0')
+            self.assertEqual(report['release'], '0.4.1')
             self.assertEqual(report['release_channel'], 'beta')
             self.assertEqual(len(report['languages']), 21)
             self.assertEqual(report['excluded_languages'], ['arabic.gxt', 'japanese.gxt', 'korean.gxt'])
@@ -106,9 +106,9 @@ class PortablePreparationTest(unittest.TestCase):
         with self.assertRaises(ValueError): validate_asi(bytes(MAX_ASI_BYTES + 1))
         with self.assertRaises(ValueError): validate_asi(data[:100])
 
-    @unittest.skipUnless((ROOT / 'dist/ExtendedLanguageLoader-v0.4.0.zip').exists(), 'run a build first for release checks')
+    @unittest.skipUnless((ROOT / 'dist/ExtendedLanguageLoader-v0.4.1.zip').exists(), 'run a build first for release checks')
     def test_public_release_is_loader_only(self):
-        with ZipFile(ROOT / 'dist/ExtendedLanguageLoader-v0.4.0.zip') as z:
+        with ZipFile(ROOT / 'dist/ExtendedLanguageLoader-v0.4.1.zip') as z:
             names = set(z.namelist())
             self.assertIn('ExtendedLanguageLoader.asi', names)
             self.assertIn('LICENSE', names)

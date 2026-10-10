@@ -36,6 +36,9 @@ static void mapGame(const char* path) {
         if (s.VirtualAddress < 0x1000 || s.VirtualAddress + s.SizeOfRawData > 0x901000) continue;
         std::memcpy(static_cast<uint8_t*>(image) + s.VirtualAddress, b.data() + s.PointerToRawData, s.SizeOfRawData);
     }
+    // No GPU: title-driven notice queueing is captured separately by the layout
+    // test; other smoke suites must not run the real PrintStringFromBottom.
+    *reinterpret_cast<uint8_t*>(0x71A820)=0xC3;
 }
 static void bytes(uintptr_t address, std::initializer_list<uint8_t> b) {
     std::memcpy(reinterpret_cast<void*>(address), b.begin(), b.size());

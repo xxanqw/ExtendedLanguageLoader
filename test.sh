@@ -5,7 +5,12 @@ mkdir -p tests/bin
 HOST_CXX="${HOST_CXX:-g++}"
 "$HOST_CXX" -std=c++17 -O2 -Wall -Wextra -Werror tests/core_test.cpp -o tests/bin/core_test
 tests/bin/core_test
+"$HOST_CXX" -std=c++17 -O2 -Wall -Wextra -Werror tests/install_layout_test.cpp -o tests/bin/install_layout_test
+tests/bin/install_layout_test
 python tests/preparation_unit_test.py
+"$HOST_CXX" -std=c++17 -O2 -Wall -Wextra -Werror tests/extended_font_format_test.cpp -o tests/bin/extended_font_format_test
+tests/bin/extended_font_format_test
+python tests/extended_gxt_test.py
 if [[ $# -eq 0 ]]; then
   printf '\nPortable tests passed. Native/asset tests: see docs/TESTING.md.\n'
   exit 0

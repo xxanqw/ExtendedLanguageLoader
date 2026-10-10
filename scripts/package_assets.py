@@ -39,9 +39,9 @@ def package(source, fonts, output):
     def archive(name, paths):
         with ZipFile(output / name, 'w', ZIP_DEFLATED) as z:
             for path in paths: z.write(path, path.relative_to(output))
-    archive('ExtendedLanguageLoader-v0.4.0-private.zip', base + font_files +
+    archive('ExtendedLanguageLoader-v0.4.1-private.zip', base + font_files +
             [output / 'text' / language['file'] for language in report['languages']])
-    archive('ExtendedLanguageLoader-v0.4.0-private-update.zip', base + font_files)
+    archive('ExtendedLanguageLoader-v0.4.1-private-update.zip', base + font_files)
     print(f'Private pack: {output}; NOT a cleared public release')
 
 

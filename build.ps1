@@ -32,8 +32,18 @@ if ($Test) {
     if ($LASTEXITCODE -ne 0) { throw 'Core test compilation failed.' }
     & ./tests/bin/core_test.exe
     if ($LASTEXITCODE -ne 0) { throw 'Core tests failed.' }
+    & cl @common tests/install_layout_test.cpp /Fodist/build/install_layout_test.obj /Fetests/bin/install_layout_test.exe
+    if ($LASTEXITCODE -ne 0) { throw 'Installation layout test compilation failed.' }
+    & ./tests/bin/install_layout_test.exe
+    if ($LASTEXITCODE -ne 0) { throw 'Installation layout tests failed.' }
+    & cl @common tests/extended_font_format_test.cpp /Fodist/build/extended_font_format_test.obj /Fetests/bin/extended_font_format_test.exe
+    if ($LASTEXITCODE -ne 0) { throw 'Extended font format test compilation failed.' }
+    & ./tests/bin/extended_font_format_test.exe
+    if ($LASTEXITCODE -ne 0) { throw 'Extended font format tests failed.' }
     & python tests/preparation_unit_test.py
     if ($LASTEXITCODE -ne 0) { throw 'Portable/package tests failed.' }
+    & python tests/extended_gxt_test.py
+    if ($LASTEXITCODE -ne 0) { throw 'Extended GXT conversion tests failed.' }
     & cl @common tests/windows_exports_test.cpp /Fodist/build/windows_exports_test.obj /Fetests/bin/windows_exports_test.exe
     if ($LASTEXITCODE -ne 0) { throw 'DLL smoke-test compilation failed.' }
     & ./tests/bin/windows_exports_test.exe (Join-Path $PSScriptRoot 'dist/ExtendedLanguageLoader.asi')

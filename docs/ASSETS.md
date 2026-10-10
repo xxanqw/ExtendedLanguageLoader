@@ -2,11 +2,11 @@
 
 The public source/release contains **no proprietary game GXTs, translations, fonts, EXEs, ASI loader or CLEO/Redux binary**. Examples are configuration metadata only. Obtain assets lawfully and verify their licenses before distributing any pack.
 
-GXTs must be physical `text/<basename>.gxt` files. Mod Loader-only translation discovery is not implemented. Only Latin/Cyrillic script scope is in this beta; renaming an unsupported-script file cannot supply its missing renderer.
+GXTs must be physical `text/<basename>.gxt` files within the selected root or ASI-local bundle. Self-contained ModLoader bundles are supported; arbitrary unrelated ModLoader folders are not scanned. See [installation layouts](MODLOADER.md). Only Latin/Cyrillic script scope is in this beta; renaming an unsupported-script file cannot supply its missing renderer.
 
 ## Automatic pairs
 
-With `Auto_fonts=1`, profile pairs live beside the EXE, outside Mod Loader:
+With `Auto_fonts=1`, profile pairs live under the selected installation (game root or bundle):
 
 ```text
 language-fonts/<profile>/models/fonts.txd
@@ -21,9 +21,13 @@ language-fonts/<profile>/data/fonts.dat
 
 **Russian and Belarusian do not share a glyph atlas.** The Belarusian adaptation substitutes Ё/ё for Russian И/и and Ў/ў for Щ/щ. Use both original SanLtd files for Russian; changing metrics alone does not fix glyph identity. These are custom legacy encodings, not generic CP1251/Unicode fonts. Supplied Russian/companion translations have 16,577 common entries and 14,692 identical values, with matching inspected menu keys; that is evidence, not complete encoding/rendering validation.
 
-Belarusian/Ukrainian were user-confirmed working in one setup. Corrected Russian atlas/metrics still need live retesting. Belarusian source is partial Los Santos coverage, not a full translation. Returning to `keep` forwards normal original/Mod Loader/HD font paths; it does not establish every Latin translation's accent coverage.
+These legacy references are separate from converted four-sheet ELL packages. Their source coverage varies; the Belarusian reference is partial Los Santos coverage, not a full translation. Returning to `keep` forwards normal original/Mod Loader/HD font paths; it does not establish every Latin translation's accent coverage.
 
 The runtime validates structures, locks active pairs and probes native decoding before destructive switching. Close GTA before replacing files. It routes pairs in memory rather than overwriting global files per language. Remove obsolete manual global font overrides before testing automatic routing.
+
+## Optional source-only HD experiment
+
+The source repository also documents a private Ukrainian vector-rasterization tool in `docs/UKRAINIAN-HD.md`. It updates all four styles using externally supplied fonts, preserves legacy slots/metrics and produces an isolated Ukrainian-only trial. Neither its assets nor this optional tooling are bundled in the public loader ZIP. Live game validation and font redistribution permissions remain outstanding.
 
 ## Optional private packaging
 

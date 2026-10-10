@@ -1,5 +1,6 @@
 #pragma once
 #include "font_profiles.hpp"
+#include "win_paths.hpp"
 #include <windows.h>
 #include <cstdio>
 #include <fstream>
@@ -13,8 +14,11 @@ using OpenFileFn = FILE*(__cdecl*)(const char*, const char*);
 using LogFn = void(*)(const std::string&) noexcept;
 inline VoidFn originalInit = nullptr;
 inline VoidFn originalShutdown = nullptr;
+inline VoidFn afterInit = nullptr, beforeShutdown = nullptr;
 inline LoadTxdFn originalLoadTxd = nullptr;
 inline OpenFileFn originalOpenFile = nullptr;
+using FileRouteFn = const char*(*)(const char*, const char*) noexcept;
+inline FileRouteFn textRoute = nullptr;
 inline LogFn logger = nullptr;
 inline const std::vector<ll::Language>* languages = nullptr;
 inline bool enabled = false, ready = false, initializing = false;
@@ -42,7 +46,7 @@ struct DirectoryScope {
             throw std::runtime_error("CFileMgr could not enter the game root for font loading");
     }
     ~DirectoryScope() {
-        if (!SetCurrentDirectoryW(processDirectory.data()))
+        if (!winpaths::restoreDirectory(processDirectory.data()))
             logger("ERROR: could not restore the caller's working directory after font reload");
         std::memcpy(reinterpret_cast<void*>(NativeDirectory), nativeDirectory.data(), nativeDirectory.size());
     }
@@ -69,8 +73,7 @@ struct LockedPair {
         const std::array<std::string, 2> paths{asset.txd, asset.dat};
         try {
             for (unsigned i = 0; i < 2; ++i) {
-                handles[i] = CreateFileA(paths[i].c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr,
-                    OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+                handles[i] = winpaths::open(paths[i].c_str(), GENERIC_READ, FILE_SHARE_READ, OPEN_EXISTING);
                 if (handles[i] == INVALID_HANDLE_VALUE || !GetFileInformationByHandle(handles[i], &info[i]) ||
                     (info[i].dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
                     throw std::runtime_error("Cannot lock font asset: " + paths[i]);
@@ -103,12 +106,13 @@ inline bool __cdecl loadTxd(int slot, const char* filename) {
     return originalLoadTxd(slot, routeAtlas(filename));
 }
 inline FILE* __cdecl openFile(const char* filename, const char* mode) {
-    return originalOpenFile(routeMetrics(filename, mode), mode);
+    const char* text = textRoute ? textRoute(filename, mode) : filename;
+    return originalOpenFile(routeMetrics(text, mode), mode);
 }
 inline void __cdecl initialize() {
     DirectoryScope directory;
     directory.enterRoot(); // Especially important when returning to root/Mod Loader fonts.
-    loading = desired(*reinterpret_cast<uint8_t*>(CurrentLanguage));
+    loading = enabled ? desired(*reinterpret_cast<uint8_t*>(CurrentLanguage)) : ll::FontProfile::Keep;
     std::unique_ptr<LockedPair> locks;
     if (loading != ll::FontProfile::Keep) {
         try { locks = std::make_unique<LockedPair>(assets[static_cast<unsigned>(loading)]); }
@@ -126,10 +130,12 @@ inline void __cdecl initialize() {
     loaded = loading;
     activeLocks = std::move(locks);
     ready = true;
+    if (afterInit) afterInit();
     logger(std::string("Fonts initialized: ") + ll::profileName(loaded));
 }
 inline void __cdecl shutdown() {
     ready = false;
+    if (beforeShutdown) beforeShutdown();
     originalShutdown();
     activeLocks.reset();
 }
