@@ -8,7 +8,7 @@ Fatal startup failures (invalid/missing config or GXTs, unsupported executable, 
 
 UI runs on a deferred worker, not inside `DllMain`/the loader lock. The worker retains an extra DLL reference until it exits, and initialization never waits for it. A process-wide guard prevents duplicate/renamed failing copies from spamming dialogs. If UI scheduling fails, the log remains authoritative. Non-game build/test hosts are silent.
 
-Recoverable font-package fallback and rejected runtime selections remain log-only; no repeated pop-ups interrupt gameplay. This is an unreleased source addition; see the changelog.
+Recoverable font-package fallback and rejected runtime selections remain log-only; no repeated pop-ups interrupt gameplay. Startup dialogs are included from 0.4.2 Beta.
 
 ## Hook inspection
 

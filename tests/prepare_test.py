@@ -63,7 +63,7 @@ class PreparationTest(unittest.TestCase):
             self.assertEqual(config['13']['Font_profile'], 'keep')
             self.assertEqual(config['14']['Font_profile'], 'keep')
             self.assertEqual(report['rendering_requirements'], {})
-            self.assertEqual(report['release'], '0.4.1')
+            self.assertEqual(report['release'], '0.4.2')
             self.assertEqual(report['release_channel'], 'beta')
             self.assertEqual(report['script_scope'], ['Latin', 'Cyrillic'])
             self.assertEqual(report['excluded_languages'], ['arabic.gxt', 'japanese.gxt', 'korean.gxt'])
@@ -137,7 +137,7 @@ class PreparationTest(unittest.TestCase):
                          'ee5b0f69372e1c1018a62af9fc4879daf6aacbdc58bc4ca57eafa75701b46d94')
 
     def test_packaged_font_manifest(self):
-        with ZipFile(DIST / 'ExtendedLanguageLoader-v0.4.1-private.zip') as archive:
+        with ZipFile(DIST / 'ExtendedLanguageLoader-v0.4.2-private.zip') as archive:
             report = json.loads(archive.read('language-build-report.json'))
             self.assertEqual(set(report['font_assets']), {
                 f'language-fonts/{name}/{path}' for name in ('cyrillic', 'ukrainian', 'belarusian')
@@ -149,7 +149,7 @@ class PreparationTest(unittest.TestCase):
 
     def test_beta_archives_exclude_deferred_assets(self):
         root = DIST
-        for name in ('ExtendedLanguageLoader-v0.4.1-private.zip', 'ExtendedLanguageLoader-v0.4.1-private-update.zip'):
+        for name in ('ExtendedLanguageLoader-v0.4.2-private.zip', 'ExtendedLanguageLoader-v0.4.2-private-update.zip'):
             with ZipFile(root / name) as archive:
                 names = set(archive.namelist())
                 self.assertFalse(any(any(word in path for word in ('arabic', 'japanese', 'korean')) for path in names))

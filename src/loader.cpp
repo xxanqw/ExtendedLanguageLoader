@@ -397,7 +397,7 @@ void initialize(HINSTANCE instance) {
     if(guardError==ERROR_ALREADY_EXISTS){CloseHandle(instanceGuard);instanceGuard=nullptr;throw std::runtime_error("Another ExtendedLanguageLoader copy is already loaded");}
     if(bundledInstall)for(const char* path:{"ExtendedLanguageLoader.asi","scripts\\ExtendedLanguageLoader.asi"})
         if(exists(root+path) && ll::pathKey(root+path)!=ll::pathKey(moduleFilename))throw std::runtime_error(std::string("Remove the root/scripts ELL copy before using the bundle: ")+path);
-    log("ExtendedLanguageLoader 0.4.1 - Latin/Cyrillic, SA 1.0 US only");
+    log("ExtendedLanguageLoader 0.4.2 - Latin/Cyrillic, SA 1.0 US only");
     log(std::string("Installation: ")+(bundledInstall?"ASI-local bundle":"game root")+"; config "+configPath);
 #ifdef LL_HOOK_DIAGNOSTICS
     log("Read-only hook diagnostics enabled; unknown hooks are still refused");

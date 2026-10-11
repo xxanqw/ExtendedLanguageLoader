@@ -1,4 +1,4 @@
-# Upgrade to ExtendedLanguageLoader 0.4.1
+# Upgrade to ExtendedLanguageLoader 0.4.2
 
 The 0.x.x branch is beta. The former filename was `LanguageLoaderTest.asi`; runtime/log/export names now use **ExtendedLanguageLoader**. Do not load both.
 
@@ -23,6 +23,6 @@ If the old loader cannot run to select English, back up and set aside `gta_sa.se
 
 ## Verify
 
-`ExtendedLanguageLoader.log` must start `ExtendedLanguageLoader 0.4.1` and reach `Ready`. The 21-slot example reports **`Ready: 21 slots, 3 pages`**; stock example reports five slots. Redux `Accepted` alone is not successful startup.
+`ExtendedLanguageLoader.log` must start `ExtendedLanguageLoader 0.4.2` and reach `Ready`. The 21-slot example reports **`Ready: 21 slots, 3 pages`**; stock example reports five slots. Redux `Accepted` alone is not successful startup.
 
 One-based full-example slots: **Belarusian 6, Russian 16, Ukrainian 21**. Test all pages and English → Russian → Belarusian → Ukrainian → English. Check Russian Настройки, И/и, Й/й, Щ/щ, literal Ё where used, and subtitles. Live rendering/gameplay/persistence are not established by automated tests.

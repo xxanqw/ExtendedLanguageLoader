@@ -2,7 +2,7 @@
 
 All 0.x.x releases are beta.
 
-## Unreleased
+## 0.4.2 Beta
 
 - Show one deferred Windows error dialog per game process when fatal startup validation fails, including the failure reason and config/log locations.
 - Keep recoverable font fallback and runtime selection failures log-only. Non-game test hosts stay silent.

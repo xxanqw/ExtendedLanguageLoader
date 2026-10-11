@@ -1,18 +1,18 @@
 # ExtendedLanguageLoader
 
-**0.4.1 Beta** — a configurable language chooser for **GTA San Andreas 1.0 US HOODLUM (32-bit)**.
+**0.4.2 Beta** — a configurable language chooser for **GTA San Andreas 1.0 US HOODLUM (32-bit)**.
 
 - Up to 64 configured languages, with nine per page.
 - Independent stock-script language mapping for shops, wardrobes and other scripts.
 - Root, `scripts/` and self-contained ModLoader installations.
 - Optional paired legacy fonts or four independent ELL font sheets: Futura, Beckett, Bank Gothic and Pricedown.
-- Checked hooks, validated assets and duplicate-loader protection.
+- Checked hooks, validated assets, duplicate-loader protection and startup error dialogs.
 
 This is a finite **8-bit** text pipeline, not a Unicode/UTF-8 renderer. Only Latin/Cyrillic scripts are supported. Arabic, Japanese and Korean are deferred. Font resolution does not increase the available character slots.
 
 ## Install
 
-Download **[0.4.1 Beta](https://github.com/xxanqw/ExtendedLanguageLoader/releases/tag/v0.4.1)**. An existing ASI loader and the supported game executable are required; neither is supplied.
+Download **[0.4.2 Beta](https://github.com/xxanqw/ExtendedLanguageLoader/releases/tag/v0.4.2)**. An existing ASI loader and the supported game executable are required; neither is supplied.
 
 1. Close GTA and back up your config and preferences outside the game directory.
 2. Put `ExtendedLanguageLoader.asi` beside `gta_sa.exe`.
@@ -50,7 +50,7 @@ bash test.sh
 bash build.sh
 ```
 
-Outputs: `dist/ExtendedLanguageLoader.asi` and `dist/ExtendedLanguageLoader-v0.4.1.zip`. CI is asset-free. [Optional Wine/reference tests](docs/TESTING.md) use external fixtures and fake graphics; they do not establish live GTA/RenderWare or universal mod compatibility.
+Outputs: `dist/ExtendedLanguageLoader.asi` and `dist/ExtendedLanguageLoader-v0.4.2.zip`. CI is asset-free. [Optional Wine/reference tests](docs/TESTING.md) use external fixtures and fake graphics; they do not establish live GTA/RenderWare or universal mod compatibility.
 
 ## License
 

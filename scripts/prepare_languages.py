@@ -170,7 +170,7 @@ def prepare(source, destination):
             f.unlink()
     (destination / 'languages.ini').write_text('\n'.join(ini), encoding='ascii')
     report = {'source': str(source.resolve()), 'languages': records,
-              'project': 'ExtendedLanguageLoader', 'release': '0.4.1', 'release_channel': 'beta', 'script_scope': ['Latin', 'Cyrillic'],
+              'project': 'ExtendedLanguageLoader', 'release': '0.4.2', 'release_channel': 'beta', 'script_scope': ['Latin', 'Cyrillic'],
               'excluded_languages': [name + '.gxt' for name in excluded],
               'font_switching': True, 'rendering_verified': False,
               'font_notes': {'ukrainian': 'Companion GXT byte mapping matched; user reports working in live setup, not universal validation',

@@ -10,7 +10,7 @@ body:
     id: version
     attributes:
       label: ELL version
-      placeholder: 0.4.1 Beta
+      placeholder: 0.4.2 Beta
     validations:
       required: true
   - type: dropdown
