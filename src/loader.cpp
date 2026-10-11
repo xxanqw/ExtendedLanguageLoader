@@ -10,6 +10,7 @@
 #include "redux_binding.hpp"
 #include "silentpatch_binding.hpp"
 #include "compatibility_notice.hpp"
+#include "error_dialog.hpp"
 #ifdef LL_HOOK_DIAGNOSTICS
 #include "hook_diagnostics.hpp"
 #endif
@@ -48,6 +49,17 @@ void log(const std::string& message) noexcept {
         DWORD written=0;WriteFile(f,message.data(),static_cast<DWORD>(message.size()),&written,nullptr);
         WriteFile(f,"\r\n",2,&written,nullptr);CloseHandle(f);
     }
+}
+void startupFailure(HINSTANCE instance,const char* reason) noexcept {
+    try {
+        log(std::string("DISABLED: ")+reason);
+        char executable[32768]{};
+        const auto n=winpaths::moduleName(nullptr,executable,sizeof(executable));
+        if(!n || n>=sizeof(executable)){log("Startup dialog unavailable: cannot identify process");return;}
+        const auto result=error_dialog::queue(instance,executable,reason,configPath,logPath);
+        if(result==error_dialog::Result::Queued)log("Startup error dialog queued outside DllMain");
+        else if(result==error_dialog::Result::Unavailable)log("Startup dialog unavailable; see DISABLED reason above");
+    } catch(...) {OutputDebugStringA("ELL: unable to report startup failure; loader remains disabled\n");}
 }
 std::string setting(const std::string& section, const char* key, const char* fallback = "") {
     char value[512]{};
@@ -573,8 +585,8 @@ BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID) {
     // Static CRT builds require thread notifications; do not disable them.
     if (reason == DLL_PROCESS_ATTACH) {
         try { initialize(instance); }
-        catch (const std::exception& e) { log(std::string("DISABLED: ") + e.what()); }
-        catch (...) { log("DISABLED: unexpected initialization error"); }
+        catch (const std::exception& e) { startupFailure(instance,e.what()); }
+        catch (...) { startupFailure(instance,"Unexpected initialization error"); }
     }
     // No unload/restore during shutdown: the game may still hold font/text/menu pointers.
     return TRUE;

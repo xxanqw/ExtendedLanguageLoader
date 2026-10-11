@@ -7,6 +7,8 @@ HOST_CXX="${HOST_CXX:-g++}"
 tests/bin/core_test
 "$HOST_CXX" -std=c++17 -O2 -Wall -Wextra -Werror tests/install_layout_test.cpp -o tests/bin/install_layout_test
 tests/bin/install_layout_test
+"$HOST_CXX" -std=c++17 -O2 -Wall -Wextra -Werror tests/error_dialog_test.cpp -o tests/bin/error_dialog_test
+tests/bin/error_dialog_test
 python tests/preparation_unit_test.py
 "$HOST_CXX" -std=c++17 -O2 -Wall -Wextra -Werror tests/extended_font_format_test.cpp -o tests/bin/extended_font_format_test
 tests/bin/extended_font_format_test

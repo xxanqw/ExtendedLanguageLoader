@@ -36,6 +36,10 @@ if ($Test) {
     if ($LASTEXITCODE -ne 0) { throw 'Installation layout test compilation failed.' }
     & ./tests/bin/install_layout_test.exe
     if ($LASTEXITCODE -ne 0) { throw 'Installation layout tests failed.' }
+    & cl @common tests/error_dialog_test.cpp /Fodist/build/error_dialog_test.obj /Fetests/bin/error_dialog_test.exe
+    if ($LASTEXITCODE -ne 0) { throw 'Error dialog test compilation failed.' }
+    & ./tests/bin/error_dialog_test.exe
+    if ($LASTEXITCODE -ne 0) { throw 'Error dialog format tests failed.' }
     & cl @common tests/extended_font_format_test.cpp /Fodist/build/extended_font_format_test.obj /Fetests/bin/extended_font_format_test.exe
     if ($LASTEXITCODE -ne 0) { throw 'Extended font format test compilation failed.' }
     & ./tests/bin/extended_font_format_test.exe
@@ -48,6 +52,10 @@ if ($Test) {
     if ($LASTEXITCODE -ne 0) { throw 'DLL smoke-test compilation failed.' }
     & ./tests/bin/windows_exports_test.exe (Join-Path $PSScriptRoot 'dist/ExtendedLanguageLoader.asi')
     if ($LASTEXITCODE -ne 0) { throw 'x86 DLL/export/refusal smoke test failed.' }
+    & cl @common tests/windows_error_dialog_test.cpp /Fodist/build/windows_error_dialog_test.obj /Fetests/bin/windows_error_dialog_test.exe
+    if ($LASTEXITCODE -ne 0) { throw 'Error dialog worker test compilation failed.' }
+    & ./tests/bin/windows_error_dialog_test.exe (Join-Path $PSScriptRoot 'dist/ExtendedLanguageLoader.asi')
+    if ($LASTEXITCODE -ne 0) { throw 'Error dialog worker/lifetime tests failed.' }
     # Emit actual native build footprint and runtime dependencies into CI logs.
     & dumpbin /nologo /exports /dependents dist/ExtendedLanguageLoader.asi
     if ($LASTEXITCODE -ne 0) { throw 'Could not inspect built ASI.' }

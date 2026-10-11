@@ -2,6 +2,12 @@
 
 All 0.x.x releases are beta.
 
+## Unreleased
+
+- Show one deferred Windows error dialog per game process when fatal startup validation fails, including the failure reason and config/log locations.
+- Keep recoverable font fallback and runtime selection failures log-only. Non-game test hosts stay silent.
+- Test message formatting, duplicate suppression, asynchronous worker/DLL lifetime and actual startup-error dispatch with a captured MessageBox backend.
+
 ## 0.4.1 Beta
 
 - Support self-contained ModLoader bundles alongside existing root/scripts installs.

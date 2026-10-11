@@ -36,6 +36,12 @@ static void __cdecl slotNothing(int){}
 static void __thiscall texture(PrivateSprite* s,const char*){s->texture=reinterpret_cast<void*>(1);}
 static void __thiscall deleteTexture(PrivateSprite* s){s->texture=nullptr;}
 static FILE* __cdecl actualOpen(const char* path,const char* mode){fileCall=path;return std::fopen(path,mode);}
+static HANDLE dialogShown=nullptr;
+static int WINAPI capturedMessageBox(HWND owner,LPCSTR text,LPCSTR title,UINT flags){
+ assert(!owner && (flags&MB_ICONERROR));assert(std::strstr(title,"ExtendedLanguageLoader"));
+ assert(std::strstr(text,"Missing/unlockable GXT"));assert(std::strstr(text,"languages.ini"));assert(std::strstr(text,"ExtendedLanguageLoader.log"));
+ assert(SetEvent(dialogShown));return IDOK;
+}
 static unsigned noticeDraws=0;
 static void __cdecl noticePrint(float x,float y,const char* text){
  ++noticeDraws;assert(x>0&&y>0);assert(std::strstr(text,"CLEO support is experimental"));
@@ -87,10 +93,19 @@ int main(int argc,char**argv){
  std::memcpy(&reg,&rp,sizeof(reg));std::memcpy(&unreg,&up,sizeof(unreg));
  if(mode=="iat"){assert(reg&&unreg);assert(reg(0,&poisonImports,nullptr,&cookie)==0);}
  if(bundle)assert(SetCurrentDirectoryA(ll::parentDirectory(modulePath).c_str()));
+ if(mode=="dialog-error"){
+  dialogShown=CreateEventA(nullptr,TRUE,FALSE,nullptr);assert(dialogShown);
+  const auto user32=LoadLibraryA("user32.dll");assert(user32);
+  const auto entry=reinterpret_cast<uintptr_t>(GetProcAddress(user32,"MessageBoxA"));assert(entry);
+  DWORD old=0;assert(VirtualProtect(reinterpret_cast<void*>(entry),5,PAGE_EXECUTE_READWRITE,&old));
+  jumpTo(entry,reinterpret_cast<uintptr_t>(&capturedMessageBox));
+  assert(VirtualProtect(reinterpret_cast<void*>(entry),5,old,&old));
+ }
  HMODULE module=LoadLibraryA(modulePath.c_str());assert(module);
  if(cookie){assert(unreg(cookie)==0);assert(notifications==1&&translatedCalls==0);}
  const auto status=reinterpret_cast<int(__cdecl*)()>(GetProcAddress(module,"ExtendedLanguageLoaderStatus"));assert(status);
- if(mode=="reject"||mode=="conflict"||mode=="menu-label-conflict"||unitsBad){
+ if(mode=="reject"||mode=="conflict"||mode=="menu-label-conflict"||unitsBad||mode=="dialog-error"){
+  if(mode=="dialog-error"){assert(WaitForSingleObject(dialogShown,10000)==WAIT_OBJECT_0);CloseHandle(dialogShown);}
   assert(!status());assert(!std::memcmp(untouched.data(),reinterpret_cast<void*>(0x6A01D2),untouched.size()));
   std::cout<<"PASS: invalid/conflicting bundle refused before any text hook commit.\n";return 0;
  }
